@@ -50,6 +50,11 @@ def generate_t1_experiment(qubit: int, times: Sequence[float]) -> StratifiedExpe
         t_in_us = t/MICROSECOND
         components = (Component(sequence, settings, [qubit], "T"+str(t_in_us)+"us"), )
 
+        # JC COMMENT: As time can't yet be compared across experiments my gut feeling is to have
+        #             depth is equal its order in the sorted sequence of times.
+        #             Eg. times = [0.3us, 3ms, 10ms]
+        #                 depth = [0    , 1  , 2] or [1, 2, 3] if you dont like a zero index.
+
         # the depth is time in units of [100ns]
         layers.append(Layer(int(round(t_in_us / USEC_PER_DEPTH)), components))
 
@@ -69,6 +74,8 @@ def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperim
         experiments = [experiments]
     acquire_stratified_data(qc, experiments, num_shots)
     for expt in experiments:
+        # JC COMMENT: perhaps <Z> expectation and RB can transform  <Z> to survival?
+        #             Probably need something generic too.
         # TODO: standardize survival to mean 0s survival? Change label?
         populate_rb_survival_statistics(expt) # populate with relevant estimates
         for layer in expt.layers:
@@ -87,6 +94,31 @@ def estimate_t1(experiment: StratifiedExperiment):
     """
     x_data = [layer.depth * USEC_PER_DEPTH for layer in experiment.layers]  # times in u-seconds
     y_data = [layer.estimates["Fraction One"][0] for layer in experiment.layers]
+
+    # JC COMMENT: we lost graceful error handling now there is no try/except e.g.
+    #
+    # try:
+    #     fit to sinusoid
+    #     fit_params, fit_params_errs = fit_to_sinusoidal_waveform(angles, prob_of_one)
+    #
+    #     results.append({
+    #         'Qubit': q,
+    #         'Angle': fit_params[1],
+    #         'Prob_of_one': fit_params[2],
+    #         'Fit_params': fit_params,
+    #         'Fit_params_errs': fit_params_errs,
+    #         'Message': None,
+    #     })
+    # except RuntimeError:
+    #     print(f"Could not fit to experimental data for qubit {q}")
+    #     results.append({
+    #         'Qubit': q,
+    #         'Angle': None,
+    #         'Prob_of_one': None,
+    #         'Fit_params': None,
+    #         'Fit_params_errs': None,
+    #         'Message': 'Could not fit to experimental data for qubit' + str(q),
+    #     })
 
     fit_params, fit_params_errs = fit_to_exponential_decay_curve(np.array(x_data), np.array(y_data))
     #TODO: check if estimates exists?
